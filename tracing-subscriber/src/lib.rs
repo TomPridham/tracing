@@ -31,6 +31,7 @@
 //!   than `Vec`) as a performance optimization. Enabled by default.
 //! - [`parking_lot`]: Use the `parking_lot` crate's `RwLock` implementation
 //!   rather than the Rust standard library's implementation.
+//! - [`json`]: Use the `serde_json` crate to output logs as formatted json
 //!
 //! [`tracing`]: https://docs.rs/tracing/latest/tracing/
 //! [`Subscriber`]: https://docs.rs/tracing-core/latest/tracing_core/subscriber/trait.Subscriber.html
@@ -41,6 +42,7 @@
 //! [`chrono`]: https://crates.io/crates/chrono
 //! [`env_logger` crate]: https://crates.io/crates/env_logger
 //! [`parking_lot`]: https://crates.io/crates/parking_lot
+//! [`serde_json`]: https://crates.io/crates/serde_json
 #![doc(html_root_url = "https://docs.rs/tracing-subscriber/0.1.4")]
 #![warn(
     missing_debug_implementations,
