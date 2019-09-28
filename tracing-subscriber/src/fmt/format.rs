@@ -105,6 +105,18 @@ impl<F, T> Format<F, T> {
         }
     }
 
+    /// Use a Json output format.
+    ///
+    /// See [`Json`].
+    pub fn json(self) -> Format<Json, T> {
+        Format {
+            format: PhantomData,
+            timer: self.timer,
+            ansi: self.ansi,
+            display_target: self.display_target,
+        }
+    }
+
     /// Use the given `timer` for log message timestamps.
     pub fn with_timer<T2>(self, timer: T2) -> Format<F, T2> {
         Format {
