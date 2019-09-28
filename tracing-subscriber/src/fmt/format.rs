@@ -1,6 +1,8 @@
 //! Formatters for logging `tracing` events.
 use super::span;
 use super::time::{self, FormatTime, SystemTime};
+#[cfg(feature = "json")]
+use serde_json::json;
 #[cfg(feature = "tracing-log")]
 use tracing_log::NormalizeEvent;
 
@@ -55,6 +57,12 @@ pub struct Compact;
 /// The full format includes fields from all entered spans.
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Full;
+
+/// Marker for `Format` that indicates that a JSON log format should be used.
+///
+/// The json format includes fields from all entered spans.
+#[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
+pub struct Json;
 
 /// A pre-configured event formatter.
 ///
@@ -236,6 +244,61 @@ where
         }
         ctx.with_current(|(_, span)| write!(writer, " {}", span.fields()))
             .unwrap_or(Ok(()))?;
+        writeln!(writer)
+    }
+}
+
+#[cfg(feature = "json")]
+impl<N, T> FormatEvent<N> for Format<Json, T>
+where
+    N: for<'a> super::NewVisitor<'a>,
+    T: FormatTime,
+{
+    fn format_event(
+        &self,
+        ctx: &span::Context<'_, N>,
+        writer: &mut dyn fmt::Write,
+        event: &Event<'_>,
+    ) -> fmt::Result {
+        #[cfg(feature = "tracing-log")]
+        let normalized_meta = event.normalized_metadata();
+        #[cfg(feature = "tracing-log")]
+        let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
+        #[cfg(not(feature = "tracing-log"))]
+        let meta = event.metadata();
+
+        let (fmt_level, full_ctx) = {
+            #[cfg(feature = "ansi")]
+            {
+                (
+                    FmtLevel::new(meta.level(), self.ansi),
+                    FullCtx::new(&ctx, self.ansi),
+                )
+            }
+            #[cfg(not(feature = "ansi"))]
+            {
+                (FmtLevel::new(meta.level()), FullCtx::new(&ctx))
+            }
+        };
+        let meta = if self.display_target {
+            meta.target()
+        } else {
+            ""
+        };
+
+        write!(
+            writer,
+            json!({
+                "timestamp": &self.timer,
+                "log_level": fmt_level,
+                "context": full_ctx,
+                "meta": meta
+            }),
+        )?;
+        {
+            let mut recorder = ctx.new_visitor(writer, true);
+            event.record(&mut recorder);
+        }
         writeln!(writer)
     }
 }
