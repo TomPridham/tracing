@@ -12,6 +12,8 @@ use tracing_core::{
     field::{self, Field},
     Event, Level,
 };
+#[cfg(feature = "json")]
+use tracing_serde::SerdeMapVisitor;
 
 #[cfg(feature = "ansi")]
 use ansi_term::{Colour, Style};
@@ -288,6 +290,7 @@ where
 
         write!(
             writer,
+            "{}",
             json!({
                 "timestamp": &self.timer,
                 "log_level": fmt_level,
@@ -380,6 +383,76 @@ impl<'a> field::Visit for Recorder<'a> {
 
 // This has to be a manual impl, as `&mut dyn Writer` doesn't implement `Debug`.
 impl<'a> fmt::Debug for Recorder<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Recorder")
+            .field("writer", &format_args!("<dyn fmt::Write>"))
+            .field("is_empty", &self.is_empty)
+            .finish()
+    }
+}
+
+/// An alternative implementation of `SerdeMapVisitor` that records fields as JSON
+#[cfg(feature = "json")]
+#[derive(Debug)]
+pub struct JsonRecorder {
+    _p: (),
+}
+
+#[cfg(feature = "json")]
+impl JsonRecorder {
+    pub(crate) fn new() -> Self {
+        Self { _p: () }
+    }
+}
+
+#[cfg(feature = "json")]
+impl<'a> NewVisitor<'a> for JsonRecorder {
+    type Visitor = SerdeMapVisitor;
+
+    #[inline]
+    fn make(&self, writer: &'a mut dyn Write, is_empty: bool) -> Self::Visitor {
+        SerdeMapVisitor::new(writer, is_empty)
+    }
+}
+
+#[cfg(feature = "json")]
+impl<'a> field::Visit for JRecorder<'a> {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if field.name() == "message" {
+            self.record_debug(field, &format_args!("{}", value))
+        } else {
+            self.record_debug(field, &value)
+        }
+    }
+
+    fn record_error(&mut self, field: &Field, value: &(dyn std::error::Error + 'static)) {
+        if let Some(source) = value.source() {
+            self.record_debug(
+                field,
+                &format_args!("{} {}.source={}", value, field, source),
+            )
+        } else {
+            self.record_debug(field, &format_args!("{}", value))
+        }
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        self.maybe_pad();
+        let _ = match field.name() {
+            // Skip fields that are actually log metadata that have already been handled
+            #[cfg(feature = "tracing-log")]
+            name if name.starts_with("log.") => Ok(()),
+            name if name.starts_with("r#") => {
+                write!(self.writer, "\"{}\": \"{:?}\"", &name[2..], value)
+            }
+            name => write!(self.writer, "\"{}\": \"{:?}\"", name, value),
+        };
+    }
+}
+
+// This has to be a manual impl, as `&mut dyn Writer` doesn't implement `Debug`.
+#[cfg(feature = "json")]
+impl<'a> fmt::Debug for JRecorder<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Recorder")
             .field("writer", &format_args!("<dyn fmt::Write>"))
