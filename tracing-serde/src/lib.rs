@@ -165,7 +165,7 @@ impl<'a> Serialize for SerializeRecord<'a> {
     }
 }
 
-struct SerdeMapVisitor<S: SerializeMap> {
+pub struct SerdeMapVisitor<S: SerializeMap> {
     serializer: S,
     state: Result<(), S::Error>,
 }
